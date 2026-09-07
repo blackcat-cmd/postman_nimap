@@ -1,0 +1,182 @@
+{
+  "info": {
+    "name": "FieldForceConnect - API Testing",
+    "description": "Login (valid/invalid) and Add Customer API tests for https://test.fieldforceconnect.com/",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Login - Valid Credentials",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/account/authenticate",
+          "host": ["{{base_url}}"],
+          "path": ["api", "account", "authenticate"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.test('Login is successful', function () {",
+              "    pm.expect(jsonData.success).to.eql(true);",
+              "});",
+              "",
+              "pm.test('User details are returned', function () {",
+              "    pm.expect(jsonData.userId).to.be.a('number');",
+              "    pm.expect(jsonData.userDetail.data.Email).to.eql(pm.environment.get('username'));",
+              "});",
+              "",
+              "// Save userId and companyId for use in later requests (Add Customer, etc.)",
+              "if (jsonData.userId) {",
+              "    pm.environment.set('userId', jsonData.userId);",
+              "}",
+              "if (jsonData.companyId) {",
+              "    pm.environment.set('companyId', jsonData.companyId);",
+              "}",
+              "",
+              "// NOTE: This API returns an empty \"token\" field and uses session cookies",
+              "// for subsequent authenticated requests instead of a Bearer token.",
+              "// Postman's cookie jar will automatically attach the session cookie",
+              "// to later requests against the same base_url, as long as",
+              "// Settings > General > 'Automatically follow redirects' and cookie",
+              "// handling are left on default."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login - Invalid Credentials",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{invalid_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/account/authenticate",
+          "host": ["{{base_url}}"],
+          "path": ["api", "account", "authenticate"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// The API may still return HTTP 200 but with success:false,",
+              "// or it may return a 400/401. Handle both cases.",
+              "var jsonData;",
+              "try {",
+              "    jsonData = pm.response.json();",
+              "} catch (e) {",
+              "    jsonData = {};",
+              "}",
+              "",
+              "pm.test('Login is rejected for invalid credentials', function () {",
+              "    var isErrorStatus = pm.response.code === 400 || pm.response.code === 401 || pm.response.code === 403;",
+              "    var isSuccessFalse = jsonData.success === false;",
+              "    pm.expect(isErrorStatus || isSuccessFalse).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Add Customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"LeadId\": 0,\n  \"IsVisibleToAll\": false,\n  \"LeadName\": \"{{customer_name}}\",\n  \"RefNo\": \"\",\n  \"ReferredBy\": 0,\n  \"PersonName\": \"\",\n  \"PersonDesignation\": \"\",\n  \"PersonLocation\": \"\",\n  \"Address\": \"\",\n  \"CityId\": 0,\n  \"ContactNo\": \"\",\n  \"CountryId\": 0,\n  \"CustomFieldValues\": [],\n  \"Email\": \"\",\n  \"FrontView\": \"\",\n  \"BackView\": \"\",\n  \"Latitude\": 0,\n  \"Longitude\": 0,\n  \"LeadContacts\": [],\n  \"LeadSourceId\": 0,\n  \"LeadStageId\": 0,\n  \"LeadTags\": [],\n  \"LeadTypeId\": 0,\n  \"LocalityId\": 0,\n  \"MobileNo\": \"{{customer_mobile}}\",\n  \"OtherInfo\": \"\",\n  \"ParentLeadId\": 0,\n  \"PinCode\": \"\",\n  \"StateId\": 0,\n  \"TerritoryId\": 0,\n  \"Website\": \"\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/CRM/Lead",
+          "host": ["{{base_url}}"],
+          "path": ["api", "CRM", "Lead"]
+        },
+        "description": "Confirmed via DevTools: the UI's 'Add Customer' action actually calls the CRM Lead endpoint - a Customer is stored as a Lead record internally (see LeadName, LeadTypeId, LeadStageId fields). LeadId: 0 tells the API to create a new record; a non-zero LeadId would update an existing one."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.test('Customer (Lead) created successfully', function () {",
+              "    pm.expect(jsonData.Status).to.eql(200);",
+              "    pm.expect(jsonData.Message).to.eql('Success');",
+              "});",
+              "",
+              "pm.test('Response contains the new customer with a generated Id', function () {",
+              "    pm.expect(jsonData.data.Id).to.be.a('number');",
+              "    pm.expect(jsonData.data.LeadName).to.eql(pm.variables.get('customer_name'));",
+              "});",
+              "",
+              "// Save the new customer's Id for use in later requests (e.g. Get Customers / Get Lead by Id)",
+              "if (jsonData.data && jsonData.data.Id) {",
+              "    pm.environment.set('customerId', jsonData.data.Id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Customers (Leads list)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/api/CRM/Leads",
+          "host": ["{{base_url}}"],
+          "path": ["api", "CRM", "Leads"]
+        },
+        "description": "The Leads list endpoint observed while browsing the Leads/Customers page. Use this to confirm the customer created by 'Add Customer' appears in the list. Confirm exact query params (paging/filter) from the Network tab if the plain URL doesn't return results."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
